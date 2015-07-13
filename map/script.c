@@ -6765,6 +6765,122 @@ BUILDIN_FUNC(getitem2)
 	return SCRIPT_CMD_SUCCESS;
 }
 
+/*====================================================================
+  [Xantara]
+     *getitem_map <item id>,<amount>,"<mapname>"{,<type>,<ID for Type>};
+       type: 0=everyone, 1=party, 2=guild, 3=bg
+ =====================================================================*/
+static int buildin_getitem_map_sub(struct block_list *bl,va_list ap)
+{
+	struct item it;
+	struct guild *g = NULL;
+	struct party_data *p = NULL;
+
+	int amt,count;
+	TBL_PC *sd = (TBL_PC *)bl;
+
+	it    = va_arg(ap,struct item);
+	amt   = va_arg(ap,int);
+	count = va_arg(ap,int);
+
+	pc_getitem_map(sd,it,amt,count,LOG_TYPE_SCRIPT);
+
+	return 0;
+}
+
+BUILDIN_FUNC(getitem_map)
+{
+	struct item it;
+	struct guild *g = NULL;
+	struct party_data *p = NULL;
+	struct battleground_data *bg = NULL;
+	struct script_data *data;
+
+	int m,i,get_count,nameid,amount,flag=0,type=0,type_id=0;
+	const char *mapname;
+
+	data = script_getdata(st,2);
+	get_val(st,data);
+	if( data_isstring(data) )
+	{
+		const char *name = conv_str(st,data);
+		struct item_data *item_data = itemdb_searchname(name);
+		if( item_data )
+			nameid = item_data->nameid;
+		else
+			nameid = UNKNOWN_ITEM_ID;
+	}
+	else
+		nameid = conv_num(st,data);
+
+	if( (amount = script_getnum(st,3)) <= 0 )
+		return 0;
+
+	mapname = script_getstr(st,4);
+	if( (m = map_mapname2mapid(mapname)) < 0 )
+		return 0;
+
+	if( script_hasdata(st,5) ){
+		type    = script_getnum(st,5);
+		type_id = script_getnum(st,6);
+	}
+
+	if(nameid < 0) {
+		nameid = itemdb_searchname(-nameid);
+		flag = 1;
+	}
+	
+	if( nameid <= 0 || !itemdb_exists(nameid) ){
+		ShowError("buildin_getitem_map: Nonexistant item %d requested.\n", nameid);
+		return 1; //No item created.
+	}
+
+	memset(&it,0,sizeof(it));
+	it.nameid = nameid;
+	if(!flag)
+		it.identify = 1;
+	else
+		it.identify = itemdb_isidentified(nameid);
+
+	if (!itemdb_isstackable(nameid))
+		get_count = 1;
+	else
+		get_count = amount;
+
+	switch(type)
+	{
+		case 1:
+			if( (p = party_search(type_id)) != NULL )
+			{
+				for( i=0; i < MAX_PARTY; i++ )
+					if( p->data[i].sd && m == p->data[i].sd->bl.m )
+						pc_getitem_map(p->data[i].sd,it,amount,get_count,LOG_TYPE_SCRIPT);
+			}
+			break;
+		case 2:
+			if( (g = guild_search(type_id)) != NULL )
+			{
+				for( i=0; i < g->max_member; i++ )
+					if( g->member[i].sd && m == g->member[i].sd->bl.m )
+						pc_getitem_map(g->member[i].sd,it,amount,get_count,LOG_TYPE_SCRIPT);
+			}
+			break;
+		case 3:
+			if( (bg = bg_team_search(type_id)) != NULL )
+			{
+				for( i=0; i < MAX_BG_MEMBERS; i++ )
+					if( bg->members[i].sd && m == bg->members[i].sd->bl.m )
+						pc_getitem_map(bg->members[i].sd,it,amount,get_count,LOG_TYPE_SCRIPT);
+			}
+			break;
+		default:
+			map_foreachinmap(buildin_getitem_map_sub,m,BL_PC,it,amount,get_count);
+			break;
+	}
+
+	return 0;
+}
+
 /** Gives rental item to player
  * rentitem <item id>,<seconds>{,<account_id>}
  * rentitem "<item name>",<seconds>{,<account_id>}
@@ -20312,6 +20428,7 @@ struct script_function buildin_func[] = {
 	BUILDIN_DEF(rentitem,"vi?"),
 	BUILDIN_DEF(rentitem2,"viiiiiiii?"),
 	BUILDIN_DEF(getitem2,"viiiiiiii?"),
+	BUILDIN_DEF(getitem_map,"iis??"),
 	BUILDIN_DEF(getnameditem,"vv"),
 	BUILDIN_DEF2(grouprandomitem,"groupranditem","i?"),
 	BUILDIN_DEF(makeitem,"visii"),

@@ -39,6 +39,11 @@ static struct {
 	int randombonus_max[MAX_REFINE]; /// Cumulative maximum random bonus damage
 } refine_info[REFINE_TYPE_MAX];
 
+///Refine bonus struct [Cydh]
+static struct  s_refine_bonus {
+	struct script_code *script[MAX_REFINE+1];
+} refine_bonus[REFINE_TYPE_MAX];
+
 static int atkmods[3][MAX_WEAPON_TYPE];	/// ATK weapon modification for size (size_fix.txt)
 
 static struct eri *sc_data_ers; /// For sc_data entries
@@ -3160,6 +3165,18 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt)
 				if (!calculating) // Abort, run_script retriggered this. [Skotlex]
 					return 1;
 			}
+			//Refine Bonus [Cydh]
+			if (refine_bonus[wlv].script[r]) {
+				if (wd == &sd->left_weapon) {
+					sd->state.lr_flag = 1;
+					run_script(refine_bonus[wlv].script[r],0,sd->bl.id,0);
+					sd->state.lr_flag = 0;
+				} else
+					run_script(refine_bonus[wlv].script[r],0,sd->bl.id,0);
+				if (!calculating)
+					return 1;
+			}
+
 			if(sd->status.inventory[index].card[0]==CARD0_FORGE) { // Forged weapon
 				wd->star += (sd->status.inventory[index].card[1]>>8);
 				if(wd->star >= 15) wd->star = 40; // 3 Star Crumbs now give +40 dmg
@@ -3180,6 +3197,17 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt)
 				if( i == EQI_HAND_L ) // Shield
 					sd->state.lr_flag = 0;
 				if (!calculating) // Abort, run_script retriggered this. [Skotlex]
+					return 1;
+			}
+
+			//Refine Bonus [Cydh]
+			if (refine_bonus[REFINE_TYPE_ARMOR].script[r]) {
+				if (i == EQI_HAND_L) // Shield
+					sd->state.lr_flag = 3;
+				run_script(refine_bonus[REFINE_TYPE_ARMOR].script[r],0,sd->bl.id,0);
+				if (i == EQI_HAND_L)
+					sd->state.lr_flag = 0;
+				if (!calculating)
 					return 1;
 			}
 		} else if( sd->inventory_data[index]->type == IT_SHADOWGEAR ) { // Shadow System
@@ -13159,6 +13187,100 @@ static bool status_readdb_attrfix(const char *basedir,bool silent)
 	return true;
 }
 
+/** Refine bonus
+* @author [Cydh] house.bad@gmail.com
+* <Type>,<RefineNumber>,<{ Script }> */
+static int status_readdb_refine_bonus(void) {
+	const char* filename = "refine_bonus.txt";
+	uint32 lines = 0, count = 0;
+	char line[1024], path[256];
+	FILE* fp;
+
+	sprintf(path,"%s/%s",db_path,filename);
+	if ((fp = fopen(path, "r")) == NULL ) {
+		ShowWarning("status_readdb_refine_bonus: File not found \"%s\". Skipping...\n",path);
+		return 0;
+	}
+
+	while (fgets(line,sizeof(line),fp)) {
+		char *str[3], *p;
+		uint8 i, type, refine;
+
+		lines++;
+
+		if (line[0] == '/' && line[1] == '/')
+			continue;
+
+		memset(str,0,sizeof(str));
+		p = line;
+
+		while (ISSPACE(*p))
+			++p;
+		if (*p == '\0')
+			continue;
+		for (i = 0; i < 2; ++i) {
+			str[i] = p;
+			p = strchr(p,',');
+			if (p == NULL)
+				break;
+			*p = '\0';
+			++p;
+		}
+
+		if (p == NULL) {
+			ShowError("status_readdb_refine_bonus: Insufficient columns in line %d of \"%s\" (item with type %d). Skipping..\n", lines, path, atoi(str[0]));
+			continue;
+		}
+
+		// Equip type
+		type = atoi(str[0]);
+		if (type < REFINE_TYPE_ARMOR || type > REFINE_TYPE_WEAPON4) {
+			ShowError("status_readdb_refine_bonus : Invalid item type '%d'.\n",atoi(str[0]));
+			continue;
+		}
+
+		// Refine number
+		refine = atoi(str[1]);
+		if (refine < 0 || refine > MAX_REFINE) {
+			ShowError("status_readdb_refine_bonus : Invalid item refine number '%d' (0 - %d).\n",refine,MAX_REFINE);
+			continue;
+		}
+
+		// Script
+		if (*p != '{') {
+			ShowError("status_readdb_refine_bonus: Invalid format (Script column-start) in line %d of \"%s\" (script with item type %d and refine number %d). Skipping.\n",lines,path,type,refine);
+			continue;
+		}
+		str[2] = p;
+		p = strstr(p+1,"}");
+		if (strchr(p,',') != NULL) {
+			ShowError("status_readdb_refine_bonus: Invalid format (Script column-end) in line %d of \"%s\" (script with item type %d and refine number %d). Skipping.\n",lines,path,type,refine);
+			continue;
+		}
+
+		refine_bonus[type].script[refine] = parse_script(str[2],path,lines,0);
+		count++;
+	}
+
+	fclose(fp);
+	
+	ShowStatus("Done reading '"CL_WHITE"%lu"CL_RESET"' entries in '"CL_WHITE"%d/%s"CL_RESET"'.\n", count, db_path, filename);
+
+	return 0;
+}
+
+/** Clear refine bonus data
+* @author [Cydh] */
+void status_refine_bonus_clear(void) {
+	uint8 i, j;
+	for (i = 0; i < REFINE_TYPE_MAX; i++) {
+		for (j = 0; j < MAX_REFINE+1; j++)
+			if (refine_bonus[i].script[j])
+				script_free_code(refine_bonus[i].script[j]);
+	}
+	memset(&refine_bonus,0,sizeof(refine_bonus));
+}
+
 /**
  * Sets defaults in tables and starts read db functions
  * sv_readdb reads the file, outputting the information line-by-line to
@@ -13221,6 +13343,11 @@ int status_readdb(void)
 		aFree(dbsubpath1);
 		aFree(dbsubpath2);
 	}
+
+	// Refine bonus [Cydh]
+	status_refine_bonus_clear();
+	status_readdb_refine_bonus();
+
 	return 0;
 }
 
@@ -13241,5 +13368,6 @@ int do_init_status(void)
 }
 void do_final_status(void)
 {
+	status_refine_bonus_clear(); // Refine bonus [Cydh]
 	ers_destroy(sc_data_ers);
 }

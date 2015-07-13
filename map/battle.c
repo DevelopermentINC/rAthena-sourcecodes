@@ -7549,6 +7549,10 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 					else
 						return 0; // You can't target anything out of your duel
 				}
+				else if( map_getcell( s_bl->m, s_bl->x, s_bl->y, CELL_CHKPVP ) && map_getcell( t_bl->m, t_bl->x, t_bl->y, CELL_CHKPVP ) )		// Addon Cell PVP [Napster]
+				{
+					 state |= BCT_ENEMY;
+				}
 			}
 			if( map_flag_gvg(m) && !sd->status.guild_id && t_bl->type == BL_MOB && ((TBL_MOB*)t_bl)->mob_id == MOBID_EMPERIUM )
 				return 0; //If you don't belong to a guild, can't target emperium.
@@ -7650,15 +7654,19 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 		if( flag&BCT_PARTY || state&BCT_ENEMY )
 		{
 			int s_party = status_get_party_id(s_bl);
-			if(s_party && s_party == status_get_party_id(t_bl))
+			if(s_party && s_party == status_get_party_id(t_bl) && !(battle_config.cellpvp_party_enable && map_getcell( t_bl->m, t_bl->x, t_bl->y, CELL_CHKPVP )) )		// Addon Cell PVP [Napster]
 				state |= BCT_PARTY;
+			else
+				state |= BCT_ENEMY;
 		}
 		if( flag&BCT_GUILD || state&BCT_ENEMY )
 		{
 			int s_guild = status_get_guild_id(s_bl);
 			int t_guild = status_get_guild_id(t_bl);
-			if(s_guild && t_guild && (s_guild == t_guild || (!(flag&BCT_SAMEGUILD) && guild_isallied(s_guild, t_guild))))
+			if(s_guild && t_guild && (s_guild == t_guild || (!(flag&BCT_SAMEGUILD) && guild_isallied(s_guild, t_guild))) && !(battle_config.cellpvp_guild_enable && map_getcell( t_bl->m, t_bl->x, t_bl->y, CELL_CHKPVP )) )		// Addon Cell PVP [Napster]
 				state |= BCT_GUILD;
+			else
+				state |= BCT_ENEMY;
 		}
 	} //end non pvp/gvg chk rivality
 
@@ -8165,6 +8173,17 @@ static const struct _battle_data {
 	{ "arrow_shower_knockback",             &battle_config.arrow_shower_knockback,          1,      0,      1,              },
 	{ "devotion_rdamage_skill_only",        &battle_config.devotion_rdamage_skill_only,     1,      0,      1,              },
 	{ "max_extended_aspd",                  &battle_config.max_extended_aspd,               193,    100,    199,            },
+
+	// Addon Cell PVP [Napster]
+	{ "cellpvp_deathmatch",               &battle_config.cellpvp_deathmatch,                    1,      0,      1,              },
+	{ "cellpvp_deathmatch_delay",               &battle_config.cellpvp_deathmatch_delay,                    1000,     0,      INT_MAX,        },
+	{ "deathmatch_hp_rate",           &battle_config.deathmatch_hp_rate,         0,		0,		100,				},
+	{ "deathmatch_sp_rate",           &battle_config.deathmatch_sp_rate,         0,		0,		100,				},
+	{ "cellpvp_autobuff",               &battle_config.cellpvp_autobuff,                    1,      0,      1,              },
+	{ "cellpvp_party_enable",               &battle_config.cellpvp_party_enable,                    1,      0,      1,              },
+	{ "cellpvp_guild_enable",               &battle_config.cellpvp_guild_enable,                    1,      0,      1,              },
+	{ "cellpvp_walkout_delay",                    &battle_config.cellpvp_walkout_delay,                 5000,     0,      INT_MAX,        },
+
 	{ "monster_chase_refresh",              &battle_config.mob_chase_refresh,               1,      0,      30,             },
 	{ "mob_icewall_walk_block",             &battle_config.mob_icewall_walk_block,          75,     0,      255,            },
 	{ "boss_icewall_walk_block",            &battle_config.boss_icewall_walk_block,         0,      0,      255,            },

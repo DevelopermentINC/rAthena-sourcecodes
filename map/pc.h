@@ -234,6 +234,7 @@ struct map_session_data {
 		unsigned int banking : 1; //1 when we using the banking system 0 when closed
 		unsigned int hpmeter_visible : 1;
 		unsigned disable_atcommand_on_npc : 1; //Prevent to use atcommand while talking with NPC [Kichi]
+		unsigned int pvp : 1;		// Addon Cell PVP [Napster]
 		uint8 isBoundTrading; // Player is currently add bound item to trade list [Cydh]
 	} state;
 	struct {
@@ -309,6 +310,7 @@ struct map_session_data {
 	unsigned int canskill_tick; // used to prevent abuse from no-delay ACT files
 	unsigned int cansendmail_tick; // [Mail System Flood Protection]
 	unsigned int ks_floodprotect_tick; // [Kill Steal Protection]
+	unsigned int pvpcan_walkout_tick;		// Addon Cell PVP [Napster]
 
 	struct s_item_delay {
 		unsigned short nameid;
@@ -924,6 +926,7 @@ void pc_cart_delitem(struct map_session_data *sd,int n,int amount,int type,e_log
 void pc_putitemtocart(struct map_session_data *sd,int idx,int amount);
 void pc_getitemfromcart(struct map_session_data *sd,int idx,int amount);
 int pc_cartitem_amount(struct map_session_data *sd,int idx,int amount);
+int pc_getitem_map(struct map_session_data *sd,struct item it,int amt,int count,e_log_pick_type log_type); // [Xantara]
 
 bool pc_takeitem(struct map_session_data *sd,struct flooritem_data *fitem);
 bool pc_dropitem(struct map_session_data *sd,int n,int amount);

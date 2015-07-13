@@ -478,7 +478,8 @@ ACMD_FUNC(mapmove)
 		clif_displaymessage(fd, msg_txt(sd,247));
 		return -1;
 	}
-	if (sd->bl.m >= 0 && map[sd->bl.m].flag.nowarp && !pc_has_permission(sd, PC_PERM_WARP_ANYWHERE)) {
+	// Addon Cell PVP [Napster]
+	if (sd->state.pvp || sd->bl.m >= 0 && map[sd->bl.m].flag.nowarp && !pc_has_permission(sd, PC_PERM_WARP_ANYWHERE)) {
 		clif_displaymessage(fd, msg_txt(sd,248));
 		return -1;
 	}
@@ -824,11 +825,12 @@ ACMD_FUNC(load)
 	nullpo_retr(-1, sd);
 
 	m = map_mapindex2mapid(sd->status.save_point.map);
-	if (m >= 0 && map[m].flag.nowarpto && !pc_has_permission(sd, PC_PERM_WARP_ANYWHERE)) {
+	// Addon Cell PVP [Napster]
+	if (sd->state.pvp && (m >= 0 && map[m].flag.nowarpto && !pc_has_permission(sd, PC_PERM_WARP_ANYWHERE))) {
 		clif_displaymessage(fd, msg_txt(sd,249));	// You are not authorized to warp to your save map.
 		return -1;
 	}
-	if (sd->bl.m >= 0 && map[sd->bl.m].flag.nowarp && !pc_has_permission(sd, PC_PERM_WARP_ANYWHERE)) {
+	if (sd->state.pvp && (sd->bl.m >= 0 && map[sd->bl.m].flag.nowarp && !pc_has_permission(sd, PC_PERM_WARP_ANYWHERE))) {
 		clif_displaymessage(fd, msg_txt(sd,248));	// You are not authorized to warp from your current map.
 		return -1;
 	}
@@ -1366,6 +1368,116 @@ ACMD_FUNC(item2)
 
 /*==========================================
  *
+ * 0 = @itemmap <item id/name> {<amount>}
+ * 1 = @itemmap1 <item id/name> <amount>, <party name>
+ * 2 = @itemmap2 <item id/name> <amount>, <guild name>
+ * [Xantara]
+ *------------------------------------------*/
+ACMD_FUNC(itemmap)
+{
+	char item_name[100], party_name[NAME_LENGTH], guild_name[NAME_LENGTH];
+	int amount, get_type = 0, flag = 0, get_count, i, map;
+	struct item it;
+	struct item_data *item_data;
+	struct party_data *p;
+	struct guild *g;
+	struct s_mapiterator *iter = NULL;
+	struct map_session_data *pl_sd = NULL;
+
+	nullpo_retr(-1, sd);
+	
+	memset(item_name, '\0', sizeof(item_name));
+	memset(party_name, '\0', sizeof(party_name));
+	memset(guild_name, '\0', sizeof(guild_name));
+
+	if (strstr(command, "1") != NULL)
+		get_type = 1;
+	else if (strstr(command, "2") != NULL)
+		get_type = 2;
+
+	if (!message || !*message || 
+		get_type == 0 && sscanf(message, "\"%99[^\"]\" %d", item_name, &amount) < 1 
+					  && sscanf(message, "%99s %d", item_name, &amount) < 1 )
+	{
+		clif_displaymessage(fd, "Please, enter an item name/id (usage: @itemmap <item name or ID> {amount}).");
+		return -1;
+	}
+	if ( get_type == 1 && sscanf(message, "\"%99[^\"]\" %d, %23[^\n]", item_name, &amount, party_name) < 2 
+					   && sscanf(message, "%99s %d, %23[^\n]", item_name, &amount, party_name) < 2 )
+	{
+		clif_displaymessage(fd, "Please, enter an item name/id (usage: @itemmap1 <item id/name> <amount>, <party name>).");
+		return -1;
+	}
+	if ( get_type == 2 && sscanf(message, "\"%99[^\"]\" %d, %23[^\n]", item_name, &amount, guild_name) < 2 
+					   && sscanf(message, "%99s %d, %23[^\n]", item_name, &amount, guild_name) < 2 )
+	{
+		clif_displaymessage(fd, "Please, enter an item name/id (usage: @itemmap2 <item id/name> <amount>, <guild name>).");
+		return -1;
+	}
+
+	if ((item_data = itemdb_searchname(item_name)) == NULL &&
+	    (item_data = itemdb_exists(atoi(item_name))) == NULL)
+	{
+		clif_displaymessage(fd, msg_txt(sd,19)); // Invalid item ID or name
+		return -1;
+	}
+
+	if (amount <= 0)
+		amount = 1;	
+
+	map = sd->bl.m;
+	
+	memset(&it,0,sizeof(it));
+	it.nameid = item_data->nameid;
+	if(!flag)
+		it.identify = 1;
+	else
+		it.identify = itemdb_isidentified(item_data->nameid);
+
+	if (!itemdb_isstackable(item_data->nameid))
+		get_count = 1;
+	else
+		get_count = amount;
+
+	switch(get_type)
+	{
+		case 1:
+			if( (p = party_searchname(party_name)) == NULL )
+			{
+				clif_displaymessage(fd, msg_txt(sd,96)); // Incorrect name or ID, or no one from the party is online.
+				return -1;
+			}
+			for( i=0; i < MAX_PARTY; i++ )
+				if( p->data[i].sd && map == p->data[i].sd->bl.m )
+					pc_getitem_map(p->data[i].sd,it,amount,get_count,LOG_TYPE_COMMAND);
+			break;
+		case 2:
+			if( (g = guild_searchname(guild_name)) == NULL )
+			{
+				clif_displaymessage(fd, msg_txt(sd,94)); // Incorrect name/ID, or no one from the guild is online.
+				return -1;
+			}
+			for( i=0; i < g->max_member; i++ )
+				if( g->member[i].sd && map == g->member[i].sd->bl.m )
+					pc_getitem_map(g->member[i].sd,it,amount,get_count,LOG_TYPE_COMMAND);
+			break;
+		default:
+			iter = mapit_getallusers();
+			for (pl_sd = (TBL_PC*)mapit_first(iter); mapit_exists(iter); pl_sd = (TBL_PC*)mapit_next(iter)) {
+				if( map != pl_sd->bl.m )
+					continue;
+				pc_getitem_map(pl_sd,it,amount,get_count,LOG_TYPE_COMMAND);
+			}
+			mapit_free(iter);
+			break;
+	}
+
+	clif_displaymessage(fd, msg_txt(sd,18)); // Item created.
+	return 0;
+}
+
+/*==========================================
+ * itemreset
  *------------------------------------------*/
 ACMD_FUNC(itemreset)
 {
@@ -9749,6 +9861,10 @@ void atcommand_basecommands(void) {
 		ACMD_DEF(heal),
 		ACMD_DEF(item),
 		ACMD_DEF(item2),
+		ACMD_DEF(itemmap),
+		ACMD_DEF2("itemmap1", itemmap),
+		ACMD_DEF2("itemmap2", itemmap),
+		ACMD_DEF2("itemmap3", itemmap),
 		ACMD_DEF2("itembound",item),
 		ACMD_DEF2("itembound2",item2),
 		ACMD_DEF(itemreset),

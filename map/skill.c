@@ -6489,8 +6489,9 @@ int skill_castend_nodamage_id (struct block_list *src, struct block_list *bl, ui
 
 	case MO_ABSORBSPIRITS:
 		i = 0;
-		if (dstsd && dstsd->spiritball && (sd == dstsd || map_flag_vs(src->m) || (sd && sd->duel_group && sd->duel_group == dstsd->duel_group)) &&
-			((dstsd->class_&MAPID_BASEMASK) != MAPID_GUNSLINGER || (dstsd->class_&MAPID_UPPERMASK) != MAPID_REBELLION)) { // split the if for readability, and included gunslingers in the check so that their coins cannot be removed [Reddozen]
+		// Addon Cell PVP [Napster]
+		if (dstsd && dstsd->spiritball && (sd == dstsd || map_flag_vs(src->m)) || (map_getcell(src->m,src->x,src->y,CELL_CHKPVP) && map_getcell(bl->m,bl->x,bl->y,CELL_CHKPVP)) && ((dstsd->class_&MAPID_BASEMASK) != MAPID_GUNSLINGER || (dstsd->class_&MAPID_UPPERMASK) != MAPID_REBELLION))
+		{ // split the if for readability, and included gunslingers in the check so that their coins cannot be removed [Reddozen]
 			i = dstsd->spiritball * 7;
 			pc_delspiritball(dstsd,dstsd->spiritball,0);
 		} else if (dstmd && !(tstatus->mode&MD_BOSS) && rnd() % 100 < 20) { // check if target is a monster and not a Boss, for the 20% chance to absorb 2 SP per monster's level [Reddozen]

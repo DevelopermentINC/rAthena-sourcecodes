@@ -578,6 +578,17 @@ extern struct Battle_Config
 	int arrow_shower_knockback;
 	int devotion_rdamage_skill_only;
 	int max_extended_aspd;
+
+	// Addon Cell PVP [Napster]
+	int cellpvp_deathmatch;
+	int cellpvp_deathmatch_delay;
+	int deathmatch_hp_rate;
+	int deathmatch_sp_rate;
+	int cellpvp_autobuff;
+	int cellpvp_party_enable;
+	int cellpvp_guild_enable;
+	int cellpvp_walkout_delay;
+
 	int mob_chase_refresh; //How often a monster should refresh its chase [Playtester]
 	int mob_icewall_walk_block; //How a normal monster should be trapped in icewall [Playtester]
 	int boss_icewall_walk_block; //How a boss monster should be trapped in icewall [Playtester]
