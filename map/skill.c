@@ -14979,6 +14979,11 @@ bool skill_check_condition_castend(struct map_session_data* sd, uint16 skill_id,
 		return true;
 	}
 
+	if( sd && skill_id == MO_EXTREMITYFIST && (sd->spiritball == 0 ||!sd->sc.data[SC_EXPLOSIONSPIRITS])) {
+		clif_skill_fail(sd, skill_id, USESKILL_FAIL_LEVEL, 0);
+		return 0;
+	}
+
 	switch( sd->menuskill_id ) { // Cast start or cast end??
 		case AM_PHARMACY:
 			switch( skill_id ) {
