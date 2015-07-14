@@ -202,6 +202,7 @@ void npc_market_delfromsql_(const char *exname, unsigned short nameid, bool clea
 #ifdef SECURE_NPCTIMEOUT
 	int npc_rr_secure_timeout_timer(int tid, unsigned int tick, int id, intptr_t data);
 #endif
+	int npc_onlyreload(void);
 
 // @commands (script-based)
 int npc_do_atcmd_event(struct map_session_data* sd, const char* command, const char* message, const char* eventname);

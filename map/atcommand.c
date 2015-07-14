@@ -9816,6 +9816,112 @@ ACMD_FUNC(clonestat) {
 	return 0;
 }
 
+
+ACMD_FUNC(reloadnpcscript)
+{
+	flush_fifos();
+	script_reload();
+	npc_onlyreload();
+
+	clif_displaymessage(fd, msg_txt(sd,100)); // Scripts have been reloaded.
+
+	return 0;
+}
+
+ACMD_FUNC(afk) {
+
+	nullpo_retr(-1, sd);
+	
+	if(sd->bl.m == map_mapname2mapid("prontera"))
+	{
+		clif_displaymessage(fd, "@afk is not allowed on this map.");
+		return 0;
+	}
+	
+	if( pc_isdead(sd) )
+	{
+		clif_displaymessage(fd, "Cannot @afk if you are dead.");
+		return -1;
+	}
+	
+	if( map[sd->bl.m].flag.autotrade == battle_config.autotrade_mapflag )
+	{
+	
+	if(map[sd->bl.m].flag.pvp || map[sd->bl.m].flag.gvg){
+		clif_displaymessage(fd, "You may not use the @afk maps PVP or GVG.");
+	return -1;}
+	
+	sd->state.autotrade = 1;
+	sd->state.monster_ignore = 1;
+	pc_setsit(sd);
+	skill_sit(sd,1);
+	clif_sitting(&sd->bl);
+	clif_changelook(&sd->bl,LOOK_HEAD_TOP,471);
+	clif_specialeffect(&sd->bl, 234,AREA);
+	
+	if( battle_config.afk_timeout )
+	{
+		int timeout = atoi(message);
+		status_change_start(NULL, &sd->bl, SC_AUTOTRADE, 10000,0,0,0,0, ((timeout > 0) ? min(timeout,battle_config.afk_timeout) : battle_config.afk_timeout)*60000,0);
+	}
+	clif_authfail_fd(fd, 15);
+	}
+	else
+	
+	clif_displaymessage(fd, "@afk is not allowed on this map.");
+	return 0;
+}
+
+
+/*==========================================
+* @zenymap (By TheLordofdirTB)
+*------------------------------------------*/
+ACMD_FUNC(zenymap)
+{
+	struct map_session_data *pl_sd = NULL;
+	struct s_mapiterator* iter;
+	char map_name[MAP_NAME_LENGTH_EXT];
+	int zeny = 0, new_zeny, map_id;
+	nullpo_retr(-1, sd);
+	
+	if (!message || !*message || (sscanf(message, "%99s %d", map_name, &zeny) < 1))
+	{
+		clif_displaymessage(fd, "Please, enter an amount (usage: @zenymap ).");
+		return -1;
+	}
+	
+	if ((map_id = map_mapname2mapid(map_name)) < 0)
+	{
+		clif_displaymessage(fd, msg_txt(sd,1)); // Map not found.
+		return -1;
+	}
+	
+	if (zeny == 0)
+	{
+		clif_displaymessage(fd, "Empty Zeny");
+		return -1;
+	}
+	iter = mapit_getallusers();
+	for( pl_sd = (TBL_PC*)mapit_first(iter); mapit_exists(iter); pl_sd = (TBL_PC*)mapit_next(iter) )
+	{
+		if( pl_sd->bl.m != map_id )
+		continue;
+		new_zeny = pl_sd->status.zeny + zeny;
+		if (zeny > 0 && (zeny > MAX_ZENY || new_zeny > MAX_ZENY)) // fix positiv overflow
+		new_zeny = MAX_ZENY;
+		else if (zeny < 0 && (zeny < -MAX_ZENY || new_zeny < 0)) // fix negativ overflow
+		new_zeny = 0;
+		if (new_zeny != pl_sd->status.zeny)
+		{
+			pl_sd->status.zeny = new_zeny;
+			clif_updatestatus(pl_sd, SP_ZENY);
+		}
+	}
+	sprintf(atcmd_output, "Add Zeny User All Map : %s, Zeny : %d", map_name, zeny); // %s recalled!
+	clif_displaymessage(fd, atcmd_output);
+	return 0;
+}
+
 #include "../custom/atcommand.inc"
 
 /**
@@ -10107,6 +10213,9 @@ void atcommand_basecommands(void) {
 		ACMD_DEF(showrate),
 #endif
 		ACMD_DEF(fullstrip),
+		ACMD_DEF(reloadnpcscript),
+		ACMD_DEF(afk),
+		ACMD_DEF(zenymap),
 		ACMD_DEF(costume),
 		ACMD_DEF(cloneequip),
 		ACMD_DEF(clonestat),

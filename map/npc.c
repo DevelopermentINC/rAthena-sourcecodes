@@ -4504,6 +4504,82 @@ static void npc_debug_warps(void)
 			npc_debug_warps_sub(map[m].npc[i]);
 }
 
+int npc_onlyreload(void) {
+	struct npc_src_list *nsl;
+	int16 m, i;
+	int npc_new_min = npc_id;
+	struct s_mapiterator* iter;
+	struct block_list* bl;
+	
+	/* clear guild flag cache */
+	guild_flags_clear();
+	
+	npc_clear_pathlist();
+	
+	db_clear(npc_path_db);
+	
+	db_clear(npcname_db);
+	db_clear(ev_db);
+	
+	//Remove all npcs. [Skotlex]
+	
+	iter = mapit_geteachiddb();
+	for( bl = (struct block_list*)mapit_first(iter); mapit_exists(iter); bl = (struct block_list*)mapit_next(iter) )
+	{
+		switch(bl->type)
+		{
+			case BL_NPC:
+			if( bl->id != fake_nd->bl.id )// don't remove fake_nd
+			npc_unload((struct npc_data *)bl, false);
+			break;
+		}
+	}
+	mapit_free(iter);
+	
+	if(battle_config.dynamic_mobs)
+	{
+		if (map[map_num].npc_num > 0)
+		ShowWarning("npc_reload: %d npcs weren't removed at map %s!\n", map[map_num].npc_num, map[map_num].name);
+	}
+	
+	npc_warp = npc_shop = npc_script = 0;
+	
+	// reset mapflags
+	map_flags_init();
+	
+	//TODO: the following code is copy-pasted from do_init_npc(); clean it up
+	// Reloading npcs now
+	for (nsl = npc_src_files; nsl; nsl = nsl->next)
+	{
+		ShowStatus("Loading NPC file: %s"CL_CLL"\r", nsl->name);
+		npc_parsesrcfile(nsl->name,false);
+	}
+	ShowInfo ("Done loading '"CL_WHITE"%d"CL_RESET"' NPCs:"CL_CLL"\n"
+	"\t-'"CL_WHITE"%d"CL_RESET"' Warps\n"
+	"\t-'"CL_WHITE"%d"CL_RESET"' Shops\n"
+	"\t-'"CL_WHITE"%d"CL_RESET"' Scripts\n",
+	npc_id - npc_new_min, npc_warp, npc_shop, npc_script);
+	
+	//Re-read the NPC Script Events cache.
+	npc_read_event_script();
+	
+	/* refresh guild castle flags on both woe setups */
+	npc_event_doall("OnAgitInit");
+	npc_event_doall("OnAgitInit2");
+	
+	//Execute the OnInit event for freshly loaded npcs. [Skotlex]
+	ShowStatus("Event '"CL_WHITE"OnInit"CL_RESET"' executed with '"CL_WHITE"%d"CL_RESET"' NPCs.\n",npc_event_doall("OnInit"));
+	
+	do_reload_instance();
+	
+	// Execute rest of the startup events if connected to char-server. [Lance]
+	if(!CheckForCharServer())
+	{
+		ShowStatus("Event '"CL_WHITE"OnInterIfInit"CL_RESET"' executed with '"CL_WHITE"%d"CL_RESET"' NPCs.\n", npc_event_doall("OnInterIfInit"));
+	}
+	return 0;
+}
+
 /*==========================================
  * npc initialization
  *------------------------------------------*/
